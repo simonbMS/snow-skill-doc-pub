@@ -26,7 +26,23 @@ Questo step farà sì che nell'immagine dei container che eseguono i tool siano 
 
 ![Save confirmed](./pictures/sandbox-saved.png)
 
-## STEP 2: Inserire i secret nel KeyVault
+## STEP 2: Abilitare l'accesso diretto a Service Now
+
+In questo step viene istruito l'agent a non passare dalla Virtual Network per accedere a Service Now.
+
+Se l'FQND di Service Now è già presente, passare allo step successivo.
+
+1. Posizionarsi su:
+    * Settings --> Tab Workspace configuration --> Sezione networking
+
+![Networking settings](./pictures/network-settings.png)
+
+2. Scendere fino alla sezione **Add a custom host**
+3. Digitare nel box sottostante `*.service-now.com` (o entrambe gli FQDN completi di certificazione e produzione)
+4. Cliccare su `+ Add`
+5. Cliccare su `Save`
+
+## STEP 3: Inserire i secret nel KeyVault
 
 In questo step dovranno essere creati i secret necessari sul KeyVault. Le istruzioni per inserire un secret sul keyvault possono essere lette [qui](https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-portal#add-a-secret-to-key-vault).
 
@@ -42,7 +58,7 @@ I nomi seguenti sono statici e **non devono essere sostituiti**:
 
 Inoltre verificare che la **User-Assigned Managed Identity** assegnata all'Azure SRE Agent abbia **accesso in lettura ai secret del Key Vault** indicato.
 
-## STEP 3: Preparare la skill per l'agent specifico
+## STEP 4: Preparare la skill per l'agent specifico
 
 In questo step il template della skill sarà customizzato con i parametri necessari per lo specifico SRE Agent.
 
@@ -83,7 +99,7 @@ Eseguire i seguenti passi, **solo se non si è eseguita la procedura automatica*
 
 I valori delle code devono corrispondere esattamente ai nomi restituiti da ServiceNow: non abbreviarli, tradurli o modificarne maiuscole, spazi o caratteri.
 
-## STEP 4: Prepara un ticket su Service Now
+## STEP 5: Prepara un ticket su Service Now
 
 Predisporre un ticket di test nell'ambiente Service Now target (preferibilmente certificazione).
 
@@ -91,7 +107,7 @@ Predisporre un ticket di test nell'ambiente Service Now target (preferibilmente 
 
 Il ticket dovrà essere aggiunto alla coda tecnica come specificato da `SOURCE_QUEUE`.
 
-## STEP 5: Installare il Python Tool
+## STEP 6: Installare il Python Tool
 
 In questo step sarà aggiunto il Python tool di arricchimento e spostamento dell'incident.
 
@@ -104,12 +120,12 @@ In questo step sarà aggiunto il Python tool di arricchimento e spostamento dell
 2. Nel campo `Tool Name` specificare `snow-tickets-updater`. Il nome è referenziato dallo skill, quindi non modificarlo.
 3. Nel campo `description` specificare `Enrich and reassign a ServiceNow incident using credentials from Azure Key Vault`
 4. Nel campo contenente il codice, incollare il contenuto del file `snow-tickets-updater.py` senza effettiare alcuna modifica
-5. Posizionarsi nel tab `Test Playground` e valorizzare tutti i campi. Alcuni di questi campi dovranno avere lo stesso valore specificato nello [Step 3](#step-3-preparare-la-skill-per-lagent-specifico), altri sono relativi all'incident preparato nello [Step 4](#step-4-prepara-un-ticket-su-service-now).
+5. Posizionarsi nel tab `Test Playground` e valorizzare tutti i campi. Alcuni di questi campi dovranno avere lo stesso valore specificato nello [Step 4](#step-4-preparare-la-skill-per-lagent-specifico), altri sono relativi all'incident preparato nello [Step 5](#step-5-prepara-un-ticket-su-service-now).
 6. Eseguire con il tasto `|> Test`
 7. Se gli step sono stati eseguiti nel modo corretto, il test dovrebbe ritornare esito positivo e l'incident dovrebbe essere stato spostato sulla coda specificata nel parametro `DESTINATION_QUEUE`
 8. Cliccare su `Create tool`
 
-## STEP 6: Creazione della skill
+## STEP 7: Creazione della skill
 
 In questo step sarà aggiunta la skill necessaria a richiamare il Python tool appena creato.
 
@@ -138,7 +154,7 @@ Prima di installare la skill sull'Azure SRE Agent, verificare che:
 2. Nel campo `SKILL.md` incollare il testo del file `SKILL.md` generato dal tool o modificato manualmente
 3. Cliccare su create
 
-## STEP 7: istruire l'agente a richiamare lo skill
+## STEP 8: istruire l'agente a richiamare lo skill
 
 Per assicurarsi che il subagent incaricato della gestione degli incident utilizzi la skill al termine dell'indagine, aggiungere al relativo incident response plan istruzioni **simili** alle seguenti (personalizzare secondo specificità del vostro agente):
 
