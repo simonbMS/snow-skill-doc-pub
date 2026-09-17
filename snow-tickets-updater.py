@@ -1,0 +1,1077 @@
+#!/usr/bin/env python3
+"""Enrich and reassign a ServiceNow incident using credentials from Azure Key Vault.
+
+Optional environment variables:
+    SERVICENOW_HTTP_TIMEOUT_SECONDS: HTTP timeout in seconds. Defaults to 30.
+
+Required packages:
+    azure-identity
+    azure-keyvault-secrets
+"""
+
+from __future__ import annotations
+
+import argparse
+import html
+import json
+import os
+import re
+import secrets
+import string
+import sys
+import time
+import traceback
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from typing import Any
+
+from azure.core.exceptions import ClientAuthenticationError, HttpResponseError, ServiceRequestError
+from azure.identity import ManagedIdentityCredential
+from azure.keyvault.secrets import SecretClient
+
+DEFAULT_TIMEOUT_SECONDS = 30
+TOOL_NAME = "snow-tickets-updater"
+TOOL_VERSION = "2.0"
+SECRET_NAMES = {
+    "client_id": "clientid",
+    "client_secret": "clientsecret",
+    "username": "username",
+    "password": "password",
+}
+
+ACTION_NAME = "Riassegnazione"
+TARGET_SYSTEM = "SERVICENOW"
+ENTITY = "SOM"
+EXTERNAL_TRANSACTION_ID = "AINOI001"
+TRANSACTION_ID_ALPHABET = string.ascii_lowercase + string.digits
+SENSITIVE_KEYS = {
+    "access_token",
+    "authorization",
+    "client_secret",
+    "clientsecret",
+    "credentials",
+    "enrichment_text",
+    "form_data",
+    "password",
+    "refresh_token",
+    "request_body",
+    "token",
+    "u_enrichment_ai",
+    "username",
+}
+
+INSTANCE_NAME_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+INCIDENT_NUMBER_PATTERN = re.compile(r"^[A-Za-z]+\d+$")
+SYS_ID_PATTERN = re.compile(r"^[0-9a-fA-F]{32}$")
+KEY_VAULT_HOST_SUFFIXES = (
+    ".vault.azure.net",
+    ".vault.azure.cn",
+    ".vault.microsoftazure.de",
+    ".vault.usgovcloudapi.net",
+)
+TRACE_LOGGER: TraceLogger | None = None
+
+
+class ToolError(RuntimeError):
+    """Machine-readable error safe to return to the calling agent."""
+
+    def __init__(
+        self,
+        code: str,
+        stage: str,
+        message: str,
+        *,
+        retryable: bool = False,
+        http_status: int | None = None,
+        details: Any = None,
+        blocked: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.stage = stage
+        self.message = message
+        self.retryable = retryable
+        self.http_status = http_status
+        self.details = details
+        self.blocked = blocked
+
+    def as_result(self) -> dict[str, Any]:
+        error: dict[str, Any] = {
+            "code": self.code,
+            "stage": self.stage,
+            "message": self.message,
+            "retryable": self.retryable,
+        }
+        if self.http_status is not None:
+            error["http_status"] = self.http_status
+        if self.details is not None:
+            error["details"] = redact_sensitive(self.details)
+        return {
+            "status": "REASSIGNMENT_BLOCKED" if self.blocked else "REASSIGNMENT_FAILED",
+            "error": error,
+        }
+
+
+class TraceLogger:
+    """Write structured diagnostic events to stderr without affecting tool output."""
+
+    def __init__(self, incident_id: str, agent_id: str, sre_thread_id: str) -> None:
+        self.run_id = "".join(secrets.choice(TRANSACTION_ID_ALPHABET) for _ in range(16))
+        self.incident_id = incident_id
+        self.agent_id = agent_id
+        self.sre_thread_id = sre_thread_id
+        self.started_at = time.monotonic()
+
+    def log(self, level: str, event: str, stage: str, **fields: Any) -> None:
+        record = {
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+            "level": level,
+            "tool": TOOL_NAME,
+            "tool_version": TOOL_VERSION,
+            "event": event,
+            "stage": stage,
+            "run_id": self.run_id,
+            "incident_id": self.incident_id,
+            "agent_id": self.agent_id,
+            "sre_thread_id": self.sre_thread_id,
+            "elapsed_ms": round((time.monotonic() - self.started_at) * 1000),
+            **fields,
+        }
+        try:
+            print(
+                json.dumps(redact_sensitive(record), ensure_ascii=False, default=str),
+                file=sys.stderr,
+                flush=True,
+            )
+        except Exception:
+            print(
+                json.dumps(
+                    {
+                        "timestamp_utc": datetime.now(timezone.utc).isoformat(
+                            timespec="milliseconds"
+                        ),
+                        "level": "ERROR",
+                        "tool": TOOL_NAME,
+                        "event": "trace_serialization_failed",
+                        "stage": "logging",
+                    }
+                ),
+                file=sys.stderr,
+                flush=True,
+            )
+
+
+def trace_log(level: str, event: str, stage: str, **fields: Any) -> None:
+    if TRACE_LOGGER is not None:
+        TRACE_LOGGER.log(level, event, stage, **fields)
+
+
+def traceback_frames(exc: BaseException) -> list[dict[str, Any]]:
+    return [
+        {
+            "file": os.path.basename(frame.filename),
+            "line": frame.lineno,
+            "function": frame.name,
+        }
+        for frame in traceback.extract_tb(exc.__traceback__)
+    ]
+
+
+class ToolArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        error = ToolError(
+            "INVALID_ARGUMENTS",
+            "argument_parsing",
+            message,
+        )
+        self.exit(2, json.dumps(error.as_result(), ensure_ascii=False) + "\n")
+
+def redact_sensitive(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: "[REDACTED]" if key.lower() in SENSITIVE_KEYS else redact_sensitive(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_sensitive(item) for item in value]
+    return value
+
+
+def require_setting(value: str | None, name: str) -> str:
+    if not value or not value.strip():
+        raise ValueError(f"Missing required setting: {name}")
+    return value.strip()
+
+
+def build_instance_url(instance_name: str) -> str:
+    normalized_name = instance_name.strip().lower()
+    if not INSTANCE_NAME_PATTERN.fullmatch(normalized_name):
+        raise ValueError(
+            "ServiceNow instance must be a DNS label containing only lowercase letters, "
+            "numbers, and hyphens."
+        )
+    return f"https://{normalized_name}.service-now.com"
+
+
+def validate_key_vault_url(raw_url: str) -> str:
+    vault_url = require_setting(raw_url, "key vault URL")
+    try:
+        parsed_url = urllib.parse.urlsplit(vault_url)
+        port = parsed_url.port
+    except ValueError as exc:
+        raise ToolError(
+            "INVALID_KEY_VAULT_URL",
+            "validation",
+            "The Azure Key Vault URL is malformed.",
+        ) from exc
+
+    hostname = parsed_url.hostname
+    normalized_hostname = hostname.lower() if hostname else ""
+    matching_suffix = next(
+        (suffix for suffix in KEY_VAULT_HOST_SUFFIXES if normalized_hostname.endswith(suffix)),
+        None,
+    )
+    if (
+        parsed_url.scheme.lower() != "https"
+        or not hostname
+        or parsed_url.username is not None
+        or parsed_url.password is not None
+        or port is not None
+        or parsed_url.query
+        or parsed_url.fragment
+        or parsed_url.path not in {"", "/"}
+        or matching_suffix is None
+    ):
+        raise ToolError(
+            "INVALID_KEY_VAULT_URL",
+            "validation",
+            "The Key Vault URL must be an HTTPS Azure Key Vault endpoint without "
+            "credentials, a port, query parameters, or a fragment.",
+        )
+
+    vault_name = normalized_hostname[: -len(matching_suffix)]
+    if "." in vault_name or not INSTANCE_NAME_PATTERN.fullmatch(vault_name):
+        raise ToolError(
+            "INVALID_KEY_VAULT_URL",
+            "validation",
+            "The Azure Key Vault URL contains an invalid vault name.",
+        )
+    return f"https://{normalized_hostname}/"
+
+
+def get_servicenow_credentials(
+    vault_url: str,
+    managed_identity_client_id: str,
+) -> dict[str, str]:
+    credential: ManagedIdentityCredential | None = None
+    current_secret_name = ""
+    identity_mode = "user_assigned"
+    trace_log(
+        "INFO",
+        "managed_identity_initialization_started",
+        "key_vault",
+        identity_mode=identity_mode,
+        vault_url=vault_url,
+    )
+    try:
+        credential = ManagedIdentityCredential(client_id=managed_identity_client_id)
+        trace_log(
+            "INFO",
+            "managed_identity_initialized",
+            "key_vault",
+            identity_mode=identity_mode,
+        )
+        with SecretClient(vault_url=vault_url, credential=credential) as secret_client:
+            credentials = {}
+            for field, secret_name in SECRET_NAMES.items():
+                current_secret_name = secret_name
+                secret_started_at = time.monotonic()
+                trace_log(
+                    "INFO",
+                    "key_vault_secret_read_started",
+                    "key_vault",
+                    secret_name=secret_name,
+                )
+                credentials[field] = require_setting(
+                    secret_client.get_secret(secret_name).value,
+                    f"Key Vault secret '{secret_name}'",
+                )
+                trace_log(
+                    "INFO",
+                    "key_vault_secret_read_completed",
+                    "key_vault",
+                    secret_name=secret_name,
+                    duration_ms=round((time.monotonic() - secret_started_at) * 1000),
+                )
+        trace_log(
+            "INFO",
+            "key_vault_credentials_loaded",
+            "key_vault",
+            secret_count=len(credentials),
+        )
+    except ValueError as exc:
+        if current_secret_name:
+            raise ToolError(
+                "KEY_VAULT_SECRET_EMPTY",
+                "key_vault",
+                f"Required Key Vault secret '{current_secret_name}' is empty.",
+                details={"secret_name": current_secret_name},
+            ) from exc
+        raise ToolError(
+            "MANAGED_IDENTITY_CONFIGURATION_INVALID",
+            "key_vault",
+            "The managed identity configuration is invalid.",
+            details={"exception_type": type(exc).__name__},
+        ) from exc
+    except ClientAuthenticationError as exc:
+        raise ToolError(
+            "KEY_VAULT_AUTHENTICATION_FAILED",
+            "key_vault",
+            "The managed identity could not authenticate to Azure Key Vault.",
+            details={
+                "exception_type": type(exc).__name__,
+                "identity_mode": identity_mode,
+            },
+        ) from exc
+    except ServiceRequestError as exc:
+        raise ToolError(
+            "KEY_VAULT_UNREACHABLE",
+            "key_vault",
+            "Azure Key Vault could not be reached.",
+            retryable=True,
+            details={"exception_type": type(exc).__name__},
+        ) from exc
+    except HttpResponseError as exc:
+        status_code = exc.status_code
+        response = getattr(exc, "response", None)
+        response_headers = getattr(response, "headers", {}) if response is not None else {}
+        azure_error = getattr(exc, "error", None)
+        if status_code == 403:
+            code = "KEY_VAULT_ACCESS_DENIED"
+            message = "The managed identity is not authorized to read the required secrets."
+        elif status_code == 404:
+            code = "KEY_VAULT_SECRET_NOT_FOUND"
+            message = f"Required Key Vault secret '{current_secret_name}' was not found."
+        else:
+            code = "KEY_VAULT_REQUEST_FAILED"
+            message = "Azure Key Vault rejected the secret request."
+        raise ToolError(
+            code,
+            "key_vault",
+            message,
+            retryable=status_code in {408, 429} or bool(status_code and status_code >= 500),
+            http_status=status_code,
+            details={
+                "secret_name": current_secret_name,
+                "azure_error_code": getattr(azure_error, "code", None),
+                "response_ids": {
+                    key.lower(): value
+                    for key, value in response_headers.items()
+                    if key.lower()
+                    in {
+                        "x-correlation-request-id",
+                        "x-ms-keyvault-region",
+                        "x-ms-request-id",
+                    }
+                },
+            },
+        ) from exc
+    finally:
+        if credential is not None:
+            credential.close()
+            trace_log(
+                "DEBUG",
+                "managed_identity_credential_closed",
+                "key_vault",
+                identity_mode=identity_mode,
+            )
+
+    return credentials
+
+
+def request_json(
+    url: str,
+    *,
+    method: str,
+    timeout: int,
+    headers: dict[str, str],
+    stage: str,
+    error_code: str,
+    data: bytes | None = None,
+) -> tuple[int, Any]:
+    request_started_at = time.monotonic()
+    trace_log(
+        "INFO",
+        "http_request_started",
+        stage,
+        method=method,
+        url=url,
+        timeout_seconds=timeout,
+        request_body_bytes=len(data) if data is not None else 0,
+    )
+    request = urllib.request.Request(
+        url,
+        data=data,
+        headers=headers,
+        method=method,
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status_code = response.getcode()
+            raw_body = response.read().decode("utf-8")
+            response_headers = {
+                key.lower(): value
+                for key, value in response.headers.items()
+                if key.lower()
+                in {
+                    "x-correlation-id",
+                    "x-ms-request-id",
+                    "x-request-id",
+                    "x-transaction-id",
+                }
+            }
+            trace_log(
+                "INFO",
+                "http_request_completed",
+                stage,
+                method=method,
+                url=url,
+                http_status=status_code,
+                duration_ms=round((time.monotonic() - request_started_at) * 1000),
+                response_body_bytes=len(raw_body.encode("utf-8")),
+                response_ids=response_headers,
+            )
+    except urllib.error.HTTPError as exc:
+        raw_details = exc.read().decode("utf-8", errors="replace")
+        try:
+            details: Any = json.loads(raw_details)
+        except json.JSONDecodeError:
+            details = {"response": raw_details[:2000]}
+        trace_log(
+            "ERROR",
+            "http_request_failed",
+            stage,
+            method=method,
+            url=url,
+            http_status=exc.code,
+            duration_ms=round((time.monotonic() - request_started_at) * 1000),
+            retryable=exc.code in {408, 425, 429} or exc.code >= 500,
+            response_ids={
+                key.lower(): value
+                for key, value in exc.headers.items()
+                if key.lower()
+                in {
+                    "x-correlation-id",
+                    "x-ms-request-id",
+                    "x-request-id",
+                    "x-transaction-id",
+                }
+            }
+            if exc.headers
+            else {},
+        )
+        raise ToolError(
+            error_code,
+            stage,
+            f"ServiceNow returned HTTP {exc.code}.",
+            retryable=exc.code in {408, 425, 429} or exc.code >= 500,
+            http_status=exc.code,
+            details=details,
+        ) from exc
+    except urllib.error.URLError as exc:
+        trace_log(
+            "ERROR",
+            "http_request_network_failed",
+            stage,
+            method=method,
+            url=url,
+            duration_ms=round((time.monotonic() - request_started_at) * 1000),
+            reason=str(exc.reason),
+            retryable=True,
+        )
+        raise ToolError(
+            f"{error_code}_NETWORK",
+            stage,
+            f"ServiceNow could not be reached: {exc.reason}",
+            retryable=True,
+        ) from exc
+    except TimeoutError as exc:
+        trace_log(
+            "ERROR",
+            "http_request_timed_out",
+            stage,
+            method=method,
+            url=url,
+            duration_ms=round((time.monotonic() - request_started_at) * 1000),
+            timeout_seconds=timeout,
+            retryable=True,
+        )
+        raise ToolError(
+            f"{error_code}_TIMEOUT",
+            stage,
+            "The ServiceNow request timed out.",
+            retryable=True,
+        ) from exc
+
+    if not raw_body:
+        trace_log("DEBUG", "http_response_body_empty", stage, method=method, url=url)
+        return status_code, {}
+
+    try:
+        return status_code, json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        trace_log(
+            "ERROR",
+            "http_response_json_decode_failed",
+            stage,
+            method=method,
+            url=url,
+            http_status=status_code,
+            response_body_bytes=len(raw_body.encode("utf-8")),
+        )
+        raise ToolError(
+            f"{error_code}_INVALID_RESPONSE",
+            stage,
+            f"ServiceNow returned a non-JSON response with HTTP {status_code}.",
+            http_status=status_code,
+            details={"response": raw_body[:2000]},
+        ) from exc
+
+
+def fetch_servicenow_access_token(
+    instance_url: str,
+    credentials: dict[str, str],
+    timeout: int,
+) -> str:
+    form_data = urllib.parse.urlencode(
+        {
+            "grant_type": "password",
+            "client_id": credentials["client_id"],
+            "client_secret": credentials["client_secret"],
+            "username": credentials["username"],
+            "password": credentials["password"],
+        }
+    ).encode("utf-8")
+
+    _, response = request_json(
+        f"{instance_url}/oauth_token.do",
+        method="POST",
+        timeout=timeout,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        stage="servicenow_authentication",
+        error_code="SERVICENOW_AUTHENTICATION_FAILED",
+        data=form_data,
+    )
+
+    if not isinstance(response, dict):
+        raise ToolError(
+            "SERVICENOW_AUTHENTICATION_INVALID_RESPONSE",
+            "servicenow_authentication",
+            "ServiceNow OAuth response has an unexpected format.",
+        )
+
+    access_token = response.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        oauth_error = response.get("error_description") or response.get("error") or "unknown error"
+        raise ToolError(
+            "SERVICENOW_ACCESS_TOKEN_MISSING",
+            "servicenow_authentication",
+            f"ServiceNow OAuth response did not contain an access token: {oauth_error}",
+            details=response,
+        )
+
+    trace_log(
+        "INFO",
+        "servicenow_access_token_acquired",
+        "servicenow_authentication",
+    )
+    return access_token
+
+
+def fetch_incident(
+    instance_url: str,
+    access_token: str,
+    incident_id: str,
+    timeout: int,
+) -> dict[str, Any]:
+    if not (
+        INCIDENT_NUMBER_PATTERN.fullmatch(incident_id)
+        or SYS_ID_PATTERN.fullmatch(incident_id)
+    ):
+        raise ToolError(
+            "INVALID_INCIDENT_ID",
+            "validation",
+            "ServiceNow incident ID must be an incident number or a 32-character sys_id.",
+        )
+    query = urllib.parse.urlencode(
+        {
+            "sysparm_query": f"number={incident_id}^ORsys_id={incident_id}",
+            "sysparm_fields": "sys_id,number,assignment_group",
+            "sysparm_display_value": "true",
+            "sysparm_limit": "2",
+        }
+    )
+    _, response = request_json(
+        f"{instance_url}/api/now/table/incident?{query}",
+        method="GET",
+        timeout=timeout,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        },
+        stage="incident_read",
+        error_code="SERVICENOW_INCIDENT_READ_FAILED",
+    )
+
+    incidents = response.get("result") if isinstance(response, dict) else None
+    if not isinstance(incidents, list):
+        raise ToolError(
+            "SERVICENOW_INCIDENT_INVALID_RESPONSE",
+            "incident_read",
+            "ServiceNow incident response has an unexpected format.",
+            details=response,
+        )
+    if not incidents:
+        raise ToolError(
+            "INCIDENT_NOT_FOUND",
+            "incident_read",
+            f"No incident was found for incident ID '{incident_id}'.",
+        )
+    if len(incidents) > 1:
+        raise ToolError(
+            "INCIDENT_NOT_UNIQUE",
+            "incident_read",
+            f"More than one incident matched incident ID '{incident_id}'.",
+        )
+    if not isinstance(incidents[0], dict):
+        raise ToolError(
+            "SERVICENOW_INCIDENT_INVALID_RESPONSE",
+            "incident_read",
+            "The matched ServiceNow incident has an unexpected format.",
+        )
+    trace_log(
+        "INFO",
+        "incident_loaded",
+        "incident_read",
+        servicenow_number=incidents[0].get("number"),
+        servicenow_sys_id=incidents[0].get("sys_id"),
+    )
+    return incidents[0]
+
+
+def get_assignment_group(incident: dict[str, Any]) -> str:
+    assignment_group = incident.get("assignment_group")
+    if isinstance(assignment_group, dict):
+        value = assignment_group.get("display_value") or assignment_group.get("value")
+    else:
+        value = assignment_group
+
+    if not isinstance(value, str) or not value:
+        raise ToolError(
+            "ASSIGNMENT_GROUP_MISSING",
+            "incident_validation",
+            "The incident does not contain a readable assignment group.",
+        )
+    return value
+
+
+def build_enrichment(
+    enrichment_text: str,
+    survey_system_url: str,
+    incident_id: str,
+    agent_id: str,
+    sre_thread_id: str,
+) -> str:
+    parsed_url = urllib.parse.urlsplit(survey_system_url)
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+        raise ValueError("SURVEY_SYSTEM_URL must be an absolute HTTP or HTTPS URL.")
+
+    query_parameters = urllib.parse.parse_qsl(parsed_url.query, keep_blank_values=True)
+    query_parameters.extend(
+        [
+            ("incidentid", incident_id),
+            ("agentid", agent_id),
+            ("agentthreadid", sre_thread_id),
+        ]
+    )
+    survey_url = urllib.parse.urlunsplit(
+        (
+            parsed_url.scheme,
+            parsed_url.netloc,
+            parsed_url.path,
+            urllib.parse.urlencode(query_parameters),
+            parsed_url.fragment,
+        )
+    )
+    safe_url = html.escape(survey_url, quote=True)
+    enrichment = f"{enrichment_text.rstrip()}"
+    if safe_url != "EMPTY":
+        enrichment += (
+            f'<p><a href="{safe_url}" target="_blank" rel="noopener noreferrer">'
+            "Open the incident survey</a></p>"
+        )
+    trace_log(
+        "INFO",
+        "enrichment_prepared",
+        "payload_creation",
+        original_character_count=len(enrichment_text),
+        final_character_count=len(enrichment),
+        survey_host=parsed_url.netloc,
+    )
+    return enrichment
+
+
+def build_update_payload(
+    incident: dict[str, Any],
+    destination_queue: str,
+    source_system: str,
+    enrichment: str,
+) -> dict[str, str]:
+    number = incident.get("number")
+    sys_id = incident.get("sys_id")
+    if not isinstance(number, str) or not number:
+        raise ToolError(
+            "INCIDENT_NUMBER_MISSING",
+            "payload_creation",
+            "The ServiceNow incident response does not contain its number.",
+        )
+    if not isinstance(sys_id, str) or not sys_id:
+        raise ToolError(
+            "INCIDENT_SYS_ID_MISSING",
+            "payload_creation",
+            "The ServiceNow incident response does not contain its sys_id.",
+        )
+
+    payload = {
+        "u_transaction_id": "".join(
+            secrets.choice(TRANSACTION_ID_ALPHABET) for _ in range(32)
+        ),
+        "u_type": "INC",
+        "u_transaction_date": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        "u_action_name": ACTION_NAME,
+        "u_source_system": source_system,
+        "u_target_system": TARGET_SYSTEM,
+        "u_sn_number": number,
+        "u_sn_sys_id": sys_id,
+        "u_enrichment_ai": enrichment,
+        "assignment_group": destination_queue,
+        "u_entity": ENTITY,
+        "u_ext_tid": EXTERNAL_TRANSACTION_ID,
+    }
+    trace_log(
+        "INFO",
+        "update_payload_prepared",
+        "payload_creation",
+        transaction_id=payload["u_transaction_id"],
+        servicenow_number=number,
+        servicenow_sys_id=sys_id,
+        source_system=source_system,
+        destination_queue=destination_queue,
+        enrichment_character_count=len(enrichment),
+        payload_fields=sorted(payload),
+    )
+    return payload
+
+
+def post_external_update(
+    instance_url: str,
+    access_token: str,
+    payload: dict[str, str],
+    timeout: int,
+) -> tuple[int, Any]:
+    status_code, response = request_json(
+        f"{instance_url}/api/posa/update/externalupdate",
+        method="POST",
+        timeout=timeout,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        stage="incident_update",
+        error_code="SERVICENOW_UPDATE_FAILED",
+        data=json.dumps(payload).encode("utf-8"),
+    )
+
+    if isinstance(response, dict) and response.get("error"):
+        raise ToolError(
+            "SERVICENOW_UPDATE_REJECTED",
+            "incident_update",
+            "ServiceNow rejected the external update.",
+            details=response,
+        )
+    trace_log(
+        "INFO",
+        "external_update_accepted",
+        "incident_update",
+        http_status=status_code,
+        response_type=type(response).__name__,
+        response_keys=sorted(response) if isinstance(response, dict) else None,
+    )
+    return status_code, response
+
+
+def main(
+    instance: str,
+    incident_id: str,
+    sre_thread_id: str,
+    agent_id: str,
+    enrichment_text: str,
+    source_queue: str,
+    destination_queue: str,
+    source_system: str,
+    survey_system_url: str,
+    azure_client_id: str,
+    key_vault_url: str,
+    timeout_seconds: int = 30,
+) -> dict:
+    global TRACE_LOGGER
+
+    required = {
+        "instance": instance,
+        "incident_id": incident_id,
+        "sre_thread_id": sre_thread_id,
+        "agent_id": agent_id,
+        "enrichment_text": enrichment_text,
+        "source_queue": source_queue,
+        "destination_queue": destination_queue,
+        "source_system": source_system,
+        "survey_system_url": survey_system_url,
+        "azure_client_id": azure_client_id,
+        "key_vault_url": key_vault_url,
+    }
+
+    if all(value == "FOR_TESTING" for value in required.values()):
+        return {
+            "status": "ok",
+            "message": "Testing inputs accepted successfully. DO NOT USE",
+            "inputs": required,
+        }
+
+    TRACE_LOGGER = TraceLogger(incident_id, agent_id, sre_thread_id)
+    trace_log(
+        "INFO",
+        "tool_started",
+        "startup",
+        process_id=os.getpid(),
+        python_version=sys.version.split()[0],
+        instance=instance,
+        source_system=source_system,
+    )
+
+    try:
+        timeout = int(os.getenv("SERVICENOW_HTTP_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS))
+        if timeout <= 0:
+            raise ValueError("SERVICENOW_HTTP_TIMEOUT_SECONDS must be greater than zero.")
+
+        instance_url = build_instance_url(instance)
+        survey_system_url = require_setting(survey_system_url, "survey system URL")
+        source_queue = require_setting(source_queue, "source queue")
+        destination_queue = require_setting(destination_queue, "destination queue")
+        source_system = require_setting(source_system, "source system")
+        managed_identity_client_id = require_setting(
+            azure_client_id,
+            "Azure managed identity client ID",
+        )
+        key_vault_url = validate_key_vault_url(key_vault_url)
+        trace_log(
+            "INFO",
+            "configuration_validated",
+            "validation",
+            instance_url=instance_url,
+            key_vault_url=key_vault_url,
+            survey_host=urllib.parse.urlsplit(survey_system_url).netloc,
+            source_queue=source_queue,
+            destination_queue=destination_queue,
+            source_system=source_system,
+            timeout_seconds=timeout,
+            managed_identity_mode="user_assigned",
+        )
+        credentials = get_servicenow_credentials(
+            key_vault_url,
+            managed_identity_client_id,
+        )
+        access_token = fetch_servicenow_access_token(instance_url, credentials, timeout)
+        incident = fetch_incident(instance_url, access_token, incident_id, timeout)
+
+        current_queue = get_assignment_group(incident)
+        trace_log(
+            "INFO",
+            "source_queue_checked",
+            "incident_validation",
+            current_queue=current_queue,
+            expected_source_queue=source_queue,
+            matches=current_queue == source_queue,
+        )
+        if current_queue != source_queue:
+            raise ToolError(
+                "SOURCE_QUEUE_MISMATCH",
+                "incident_validation",
+                f"Current queue is '{current_queue}', expected '{source_queue}'.",
+                details={
+                    "current_queue": current_queue,
+                    "expected_source_queue": source_queue,
+                },
+                blocked=True,
+            )
+
+        enrichment = build_enrichment(
+            enrichment_text,
+            survey_system_url,
+            incident_id,
+            agent_id,
+            sre_thread_id,
+        )
+        payload = build_update_payload(
+            incident,
+            destination_queue,
+            source_system,
+            enrichment,
+        )
+        status_code, response = post_external_update(
+            instance_url,
+            access_token,
+            payload,
+            timeout,
+        )
+    except ToolError as exc:
+        trace_log(
+            "ERROR",
+            "tool_failed",
+            exc.stage,
+            error=exc.as_result()["error"],
+            status="REASSIGNMENT_BLOCKED" if exc.blocked else "REASSIGNMENT_FAILED",
+        )
+        error = json.dumps(error.as_result(), ensure_ascii=False)
+        return {
+                "status": "KO",
+                "message": error,
+                "inputs": {
+                    "instance": instance,
+                    "incident_id": incident_id,
+                    "sre_thread_id": sre_thread_id,
+                    "agent_id": agent_id,
+                    "enrichment_text": enrichment_text,
+                    "source_queue": source_queue,
+                    "destination_queue": destination_queue,
+                    "source_system": source_system,
+                    "survey_system_url": survey_system_url,
+                    "azure_client_id": azure_client_id,
+                    "key_vault_url": key_vault_url,
+                    "timeout_seconds": timeout_seconds,
+                },
+            }
+    except ValueError as exc:
+        error = ToolError("INVALID_CONFIGURATION", "validation", str(exc))
+        trace_log(
+            "ERROR",
+            "tool_failed",
+            "validation",
+            error=error.as_result()["error"],
+            status="REASSIGNMENT_FAILED",
+        )
+        error = json.dumps(error.as_result(), ensure_ascii=False)
+        return {
+                "status": "KO",
+                "message": error,
+                "inputs": {
+                    "instance": instance,
+                    "incident_id": incident_id,
+                    "sre_thread_id": sre_thread_id,
+                    "agent_id": agent_id,
+                    "enrichment_text": enrichment_text,
+                    "source_queue": source_queue,
+                    "destination_queue": destination_queue,
+                    "source_system": source_system,
+                    "survey_system_url": survey_system_url,
+                    "azure_client_id": azure_client_id,
+                    "key_vault_url": key_vault_url,
+                    "timeout_seconds": timeout_seconds,
+                },
+            }
+    except Exception as exc:
+        error = ToolError(
+            "UNEXPECTED_ERROR",
+            "unexpected",
+            "An unexpected error occurred.",
+            details={"exception_type": type(exc).__name__},
+        )
+        trace_log(
+            "CRITICAL",
+            "tool_failed_unexpectedly",
+            "unexpected",
+            error=error.as_result()["error"],
+            traceback_frames=traceback_frames(exc),
+            status="REASSIGNMENT_FAILED",
+        )
+
+        error = json.dumps(error.as_result(), ensure_ascii=False)
+        return {
+                "status": "KO",
+                "message": error,
+                "inputs": {
+                    "instance": instance,
+                    "incident_id": incident_id,
+                    "sre_thread_id": sre_thread_id,
+                    "agent_id": agent_id,
+                    "enrichment_text": enrichment_text,
+                    "source_queue": source_queue,
+                    "destination_queue": destination_queue,
+                    "source_system": source_system,
+                    "survey_system_url": survey_system_url,
+                    "azure_client_id": azure_client_id,
+                    "key_vault_url": key_vault_url,
+                    "timeout_seconds": timeout_seconds,
+                },
+            }
+    
+    trace_log(
+        "INFO",
+        "tool_completed",
+        "completion",
+        status="REASSIGNED",
+        servicenow_number=incident["number"],
+        transaction_id=payload["u_transaction_id"],
+        http_status=status_code,
+    )
+    print(
+        json.dumps(
+            {
+                "status": "REASSIGNED",
+                "incident_id": incident["number"],
+                "source_queue": current_queue,
+                "destination_queue": destination_queue,
+                "source_system": source_system,
+                "key_vault_url": key_vault_url,
+                "transaction_id": payload["u_transaction_id"],
+                "http_status": status_code,
+                "servicenow_response": redact_sensitive(response),
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    return {
+            "status": "ok",
+            "message": "SNOW update completed successfully.",
+            "inputs": {
+                "instance": instance,
+                "incident_id": incident_id,
+                "sre_thread_id": sre_thread_id,
+                "agent_id": agent_id,
+                "enrichment_text": enrichment_text,
+                "source_queue": source_queue,
+                "destination_queue": destination_queue,
+                "source_system": source_system,
+                "survey_system_url": survey_system_url,
+                "azure_client_id": azure_client_id,
+                "key_vault_url": key_vault_url,
+                "timeout_seconds": timeout_seconds,
+            },
+        }
