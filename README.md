@@ -94,7 +94,7 @@ Eseguire i seguenti passi, **solo se non si è eseguita la procedura automatica*
 | `{{SNOW_INSTANCE_NAME}}` | Nome dell'istanza ServiceNow, senza protocollo e senza il suffisso `.service-now.com`. Il tool costruisce l'URL `https://<SNOW_INSTANCE_NAME>.service-now.com`. | Certificazione: `postecertif`; produzione: `postecomprod` |
 | `{{KEYVAULT_NAME}}` | Nome della risorsa Azure Key Vault che contiene le credenziali ServiceNow. Inserire soltanto il nome: il template costruisce l'URL `https://<KEYVAULT_NAME>.vault.azure.net/`. | Nome della risorsa Key Vault |
 | `{{SOURCE_SYSTEM}}` | Identificativo del sistema sorgente inviato nel campo custom ServiceNow `u_source_system`. | `AINOISRE<SOM>`, dove `<SOM>` e' l'identificativo specifico del SOM |
-| `{{SOURCE_QUEUE}}` | Gruppo ServiceNow dal quale e' consentita la riassegnazione. L'aggiornamento viene bloccato se il ticket non appartiene esattamente a questo gruppo. | `AINOI_<SOM>` o il nome esatto concordato per il gruppo sorgente |
+| `{{SOURCE_QUEUE}}` | Gruppo ServiceNow dal quale e' consentita la riassegnazione. L'aggiornamento viene bloccato se il ticket non appartiene esattamente a questo gruppo. | `AINOISRE_<SOM>` o il nome esatto concordato per il gruppo sorgente |
 | `{{DESTINATION_QUEUE}}` | Gruppo ServiceNow destinatario della riassegnazione, inviato nel campo `assignment_group`. | Nome esatto del gruppo di destinazione |
 
 I valori delle code devono corrispondere esattamente ai nomi restituiti da ServiceNow: non abbreviarli, tradurli o modificarne maiuscole, spazi o caratteri.
