@@ -35,10 +35,10 @@ DEFAULT_TIMEOUT_SECONDS = 30
 TOOL_NAME = "snow-tickets-updater"
 TOOL_VERSION = "2.0"
 SECRET_NAMES = {
-    "client_id": "clientid",
-    "client_secret": "clientsecret",
-    "username": "username",
-    "password": "password",
+    "client_id": "snow-clientid",
+    "client_secret": "snow-clientsecret",
+    "username": "snow-username",
+    "password": "snow-password",
 }
 
 ACTION_NAME = "Riassegnazione"
@@ -827,7 +827,7 @@ def main(
     destination_queue: str,
     source_system: str,
     survey_system_url: str,
-    azure_managed_identity_client_it: str,
+    azure_managed_identity_client_id: str,
     key_vault_url: str,
     timeout_seconds: int = 30,
 ) -> dict:
@@ -843,7 +843,7 @@ def main(
         "destination_queue": destination_queue,
         "source_system": source_system,
         "survey_system_url": survey_system_url,
-        "azure_managed_identity_client_it": azure_managed_identity_client_it,
+        "azure_managed_identity_client_id": azure_managed_identity_client_id,
         "key_vault_url": key_vault_url,
     }
 
@@ -876,7 +876,7 @@ def main(
         destination_queue = require_setting(destination_queue, "destination queue")
         source_system = require_setting(source_system, "source system")
         managed_identity_client_id = require_setting(
-            azure_managed_identity_client_it,
+            azure_managed_identity_client_id,
             "Azure managed identity client ID",
         )
         key_vault_url = validate_key_vault_url(key_vault_url)
@@ -962,7 +962,7 @@ def main(
                     "destination_queue": destination_queue,
                     "source_system": source_system,
                     "survey_system_url": survey_system_url,
-                    "azure_managed_identity_client_it": azure_managed_identity_client_it,
+                    "azure_managed_identity_client_id": azure_managed_identity_client_id,
                     "key_vault_url": key_vault_url,
                     "timeout_seconds": timeout_seconds,
                 },
@@ -990,7 +990,7 @@ def main(
                     "destination_queue": destination_queue,
                     "source_system": source_system,
                     "survey_system_url": survey_system_url,
-                    "azure_managed_identity_client_it": azure_managed_identity_client_it,
+                    "azure_managed_identity_client_id": azure_managed_identity_client_id,
                     "key_vault_url": key_vault_url,
                     "timeout_seconds": timeout_seconds,
                 },
@@ -1025,7 +1025,7 @@ def main(
                     "destination_queue": destination_queue,
                     "source_system": source_system,
                     "survey_system_url": survey_system_url,
-                    "azure_managed_identity_client_it": azure_managed_identity_client_it,
+                    "azure_managed_identity_client_id": azure_managed_identity_client_id,
                     "key_vault_url": key_vault_url,
                     "timeout_seconds": timeout_seconds,
                 },
@@ -1070,7 +1070,7 @@ def main(
                 "destination_queue": destination_queue,
                 "source_system": source_system,
                 "survey_system_url": survey_system_url,
-                "azure_managed_identity_client_it": azure_managed_identity_client_it,
+                "azure_managed_identity_client_id": azure_managed_identity_client_id,
                 "key_vault_url": key_vault_url,
                 "timeout_seconds": timeout_seconds,
             },

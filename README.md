@@ -52,10 +52,10 @@ Se i secret elencati di seguito sono già presenti con i valori corretti passare
 
 I nomi seguenti sono statici e **non devono essere sostituiti**:
 
-- `clientid`: contiene il client ID OAuth ServiceNow;
-- `clientsecret`: contiene il client secret OAuth ServiceNow;
-- `username`: contiene lo username ServiceNow;
-- `password`: contiene la password ServiceNow.
+- `snow-clientid`: contiene il client ID OAuth ServiceNow;
+- `snow-clientsecret`: contiene il client secret OAuth ServiceNow;
+- `snow-username`: contiene lo username ServiceNow;
+- `snow-password`: contiene la password ServiceNow.
 
 > Attenzione: I secret devono essere abilitati e non vuoti.
 > Nel template sono riportati soltanto i loro nomi; i valori devono rimanere nel Key Vault e non devono **mai** essere inseriti nella skill.
