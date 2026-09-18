@@ -42,7 +42,7 @@ Always use these exact values:
 
 | Tool parameter | Value |
 |---|---|
-| `instance` | `{{SNOW_INSTANCE_NAME}}` |
+| `snow_instance_name` | `{{SNOW_INSTANCE_NAME}}` |
 | `key_vault_url` | `https://{{KEYVAULT_NAME}}.vault.azure.net/` |
 | `source_system` | `{{SOURCE_SYSTEM}}` |
 | `source_queue` | `{{SOURCE_QUEUE}}` |
@@ -74,7 +74,7 @@ Resolve these values from the active incident and thread:
 | `sre_thread_id` | The current Azure SRE Agent thread ID |
 | `enrichment_text` | The final evidence-based incident enrichment prepared from the investigation |
 | `survey_system_url` | The configured absolute HTTP or HTTPS URL of the survey system |
-| `azure_client_id` | The client ID of the user-assigned managed identity configured for the Azure SRE Agent |
+| `azure_managed_identity_client_it` | The client ID of the user-assigned managed identity configured for the Azure SRE Agent |
 
 Do not invent or guess a missing input. If one is unavailable, do not invoke the tool; report which input is missing.
 
@@ -113,13 +113,13 @@ Do not include:
 6. Invoke `snow-tickets-updater` exactly once with:
 
 ```yaml
-instance: {{SNOW_INSTANCE_NAME}}
+snow_instance_name: {{SNOW_INSTANCE_NAME}}
 incident_id: <ServiceNow incident number or sys_id>
 agent_id: <current Azure SRE Agent resource name>
 sre_thread_id: <current Azure SRE Agent thread ID>
 enrichment_text: <evidence-based HTML enrichment>
 survey_system_url: https://rigid-wood-036d3e4d7d-westeurope.webapp.fabricapps.net/
-azure_client_id: {{AGENT_MANAGED_IDENTITY_CLIENT_ID}}
+azure_managed_identity_client_it: {{AGENT_MANAGED_IDENTITY_CLIENT_ID}}
 source_queue: {{SOURCE_QUEUE}}
 destination_queue: {{DESTINATION_QUEUE}}
 source_system: {{SOURCE_SYSTEM}}
