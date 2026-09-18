@@ -143,6 +143,7 @@ In questo step sarà aggiunto il Python tool di arricchimento e spostamento dell
 | source_system | Valore utilizzato per `{{SOURCE_SYSTEM}}` |
 | survey_system_url | https://TEST.webapp.fabricapps.net/ |
 | azure_client_id | Valore utilizzato per `{{AGENT_MANAGED_IDENTITY_CLIENT_ID}}` |
+! key_vault_url | https://`{{KEYVAULT_NAME}}`.vault.azure.net/ - sostituire il placeholder |
 | timeout_seconds | 20 |
 
 ## STEP 7: Creazione della skill
