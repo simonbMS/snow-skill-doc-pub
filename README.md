@@ -44,7 +44,11 @@ Se l'FQND di Service Now è già presente, passare allo step successivo.
 
 ## STEP 3: Inserire i secret nel KeyVault
 
-In questo step dovranno essere creati i secret necessari sul KeyVault. Le istruzioni per inserire un secret sul keyvault possono essere lette [qui](https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-portal#add-a-secret-to-key-vault).
+In questo step dovranno essere creati i secret necessari sul KeyVault.
+
+Se i secret elencati di seguito sono già presenti con i valori corretti passare al [prossimo step](#step-4-preparare-la-skill-per-lagent-specifico).
+
+ Le istruzioni per inserire un secret sul keyvault possono essere lette [qui](https://learn.microsoft.com/en-us/azure/key-vault/secrets/quick-create-portal#add-a-secret-to-key-vault).
 
 I nomi seguenti sono statici e **non devono essere sostituiti**:
 
@@ -119,11 +123,27 @@ In questo step sarà aggiunto il Python tool di arricchimento e spostamento dell
 
 2. Nel campo `Tool Name` specificare `snow-tickets-updater`. Il nome è referenziato dallo skill, quindi non modificarlo.
 3. Nel campo `description` specificare `Enrich and reassign a ServiceNow incident using credentials from Azure Key Vault`
-4. Nel campo contenente il codice, incollare il contenuto del file `snow-tickets-updater.py` senza effettiare alcuna modifica
-5. Posizionarsi nel tab `Test Playground` e valorizzare tutti i campi. Alcuni di questi campi dovranno avere lo stesso valore specificato nello [Step 4](#step-4-preparare-la-skill-per-lagent-specifico), altri sono relativi all'incident preparato nello [Step 5](#step-5-prepara-un-ticket-su-service-now).
+4. Nel campo contenente il codice, incollare il contenuto del file `snow-tickets-updater.py.txt` senza effettiare alcuna modifica
+5. Posizionarsi nel tab `Test Playground` e valorizzare tutti i campi. Alcuni di questi campi dovranno avere lo stesso valore specificato nello [Step 4](#step-4-preparare-la-skill-per-lagent-specifico), altri sono relativi all'incident preparato nello [Step 5](#step-5-prepara-un-ticket-su-service-now). Utilizzare la tabella [qui sotto](#parametri-per-il-test) per una guida su come valorizzare i parametri
 6. Eseguire con il tasto `|> Test`
 7. Se gli step sono stati eseguiti nel modo corretto, il test dovrebbe ritornare esito positivo e l'incident dovrebbe essere stato spostato sulla coda specificata nel parametro `DESTINATION_QUEUE`
 8. Cliccare su `Create tool`
+
+### Parametri per il test
+
+| Parametro | Valore |
+| -- | -- |
+| instance | Valore utilizzato per `{{SNOW_INSTANCE_NAME}}` |
+| incident_id | ID dell'incident creato nello step 5 |
+| sre_thread_id | 743a0a23-e266-4704-8c4a-d0420c36487d (o altro guid) |
+| agent_id | test-installazione |
+| enrichment_text | <p>TEST</p> |
+| source_queue | Valore utilizzato per `{{SOURCE_QUEUE}}` |
+| destination_queue |  Valore utilizzato per `{{DESTINATION_QUEUE}}` |
+| source_system | Valore utilizzato per `{{SOURCE_SYSTEM}}` |
+| survey_system_url | https://TEST.webapp.fabricapps.net/ |
+| azure_client_id | Valore utilizzato per `{{AGENT_MANAGED_IDENTITY_CLIENT_ID}}` |
+| timeout_seconds | 20 |
 
 ## STEP 7: Creazione della skill
 

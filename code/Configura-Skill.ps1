@@ -9,7 +9,7 @@ $placeholders = [ordered]@{
     'SNOW_INSTANCE_NAME'               = "Nome dell'istanza ServiceNow, senza protocollo e senza il suffisso '.service-now.com'. Esempio: postecertif (certificazione), postecomprod (produzione)."
     'KEYVAULT_NAME'                    = "Nome della risorsa Azure Key Vault che contiene le credenziali ServiceNow (solo il nome, non l'URL completo)."
     'SOURCE_SYSTEM'                    = "Identificativo del sistema sorgente inviato nel campo custom ServiceNow 'u_source_system'. Esempio: AINOISRE<SOM>."
-    'SOURCE_QUEUE'                     = "Gruppo ServiceNow dal quale e' consentita la riassegnazione (deve corrispondere esattamente al nome in ServiceNow). Esempio: AINOI_<SOM>."
+    'SOURCE_QUEUE'                     = "Gruppo ServiceNow dal quale e' consentita la riassegnazione. L'aggiornamento viene bloccato se il ticket non appartiene esattamente a questo gruppo. | `AINOISRE_<SOM>` o il nome esatto concordato per il gruppo sorgente."
     'DESTINATION_QUEUE'                = "Gruppo ServiceNow destinatario della riassegnazione (deve corrispondere esattamente al nome in ServiceNow)."
 }
 
