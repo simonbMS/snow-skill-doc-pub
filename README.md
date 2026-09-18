@@ -165,7 +165,9 @@ In questo step sarà aggiunta la skill necessaria a richiamare il Python tool ap
 
 ## STEP 8: istruire l'agente a richiamare lo skill
 
-Per assicurarsi che il subagent incaricato della gestione degli incident utilizzi la skill al termine dell'indagine, aggiungere al relativo incident response plan istruzioni **simili** alle seguenti (personalizzare secondo specificità del vostro agente):
+Per assicurarsi che il subagent incaricato della gestione degli incident utilizzi la skill al termine dell'indagine, aggiungere al relativo incident response plan istruzioni **simili** alle seguenti (personalizzare secondo specificità del vostro agente).
+
+> ATTENZIONE! Ricordare di aggiornare gli skill agganciati all'incident response plan avendo cura che sia selezionato solo quello appena creato e siano eliminati eventuali skill utilizzati precedentemente per lo stesso scopo.
 
 ```markdown
 Gestione Incident:
@@ -178,6 +180,7 @@ Gestione Incident:
   4. classificazione della ricorrenza e tempi MTTR o MTTM.
 - Non inserire il link survey nell'enrichment: viene aggiunto automaticamente dal tool.
 - Non inviare mai testo generico, placeholder, credenziali, token o log grezzi ad alto volume nel campo `u_enrichment_ai`.
-```
 
 La skill deve essere invocata una sola volta per aggiornamento. In caso di `REASSIGNMENT_BLOCKED`, non riprovare e non forzare la riassegnazione. In caso di timeout o errore di rete durante l'aggiornamento, verificare prima lo stato corrente del ticket perché ServiceNow potrebbe avere gia' completato l'operazione.
+
+```
