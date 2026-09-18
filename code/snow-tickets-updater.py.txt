@@ -35,10 +35,10 @@ DEFAULT_TIMEOUT_SECONDS = 30
 TOOL_NAME = "snow-tickets-updater"
 TOOL_VERSION = "2.0"
 SECRET_NAMES = {
-    "client_id": "clientid",
-    "client_secret": "clientsecret",
-    "username": "username",
-    "password": "password",
+    "client_id": "snow-clientid",
+    "client_secret": "snow-clientsecret",
+    "username": "snow-username",
+    "password": "snow-password",
 }
 
 ACTION_NAME = "Riassegnazione"
@@ -818,7 +818,7 @@ def post_external_update(
 
 
 def main(
-    instance: str,
+    snow_instance_name: str,
     incident_id: str,
     sre_thread_id: str,
     agent_id: str,
@@ -827,14 +827,14 @@ def main(
     destination_queue: str,
     source_system: str,
     survey_system_url: str,
-    azure_client_id: str,
+    azure_managed_identity_client_id: str,
     key_vault_url: str,
     timeout_seconds: int = 30,
 ) -> dict:
     global TRACE_LOGGER
 
     required = {
-        "instance": instance,
+        "snow_instance_name": snow_instance_name,
         "incident_id": incident_id,
         "sre_thread_id": sre_thread_id,
         "agent_id": agent_id,
@@ -843,7 +843,7 @@ def main(
         "destination_queue": destination_queue,
         "source_system": source_system,
         "survey_system_url": survey_system_url,
-        "azure_client_id": azure_client_id,
+        "azure_managed_identity_client_id": azure_managed_identity_client_id,
         "key_vault_url": key_vault_url,
     }
 
@@ -861,7 +861,7 @@ def main(
         "startup",
         process_id=os.getpid(),
         python_version=sys.version.split()[0],
-        instance=instance,
+        instance=snow_instance_name,
         source_system=source_system,
     )
 
@@ -870,13 +870,13 @@ def main(
         if timeout <= 0:
             raise ValueError("SERVICENOW_HTTP_TIMEOUT_SECONDS must be greater than zero.")
 
-        instance_url = build_instance_url(instance)
+        instance_url = build_instance_url(snow_instance_name)
         survey_system_url = require_setting(survey_system_url, "survey system URL")
         source_queue = require_setting(source_queue, "source queue")
         destination_queue = require_setting(destination_queue, "destination queue")
         source_system = require_setting(source_system, "source system")
         managed_identity_client_id = require_setting(
-            azure_client_id,
+            azure_managed_identity_client_id,
             "Azure managed identity client ID",
         )
         key_vault_url = validate_key_vault_url(key_vault_url)
@@ -953,7 +953,7 @@ def main(
                 "status": "KO",
                 "message": error,
                 "inputs": {
-                    "instance": instance,
+                    "snow_instance_name": snow_instance_name,
                     "incident_id": incident_id,
                     "sre_thread_id": sre_thread_id,
                     "agent_id": agent_id,
@@ -962,7 +962,7 @@ def main(
                     "destination_queue": destination_queue,
                     "source_system": source_system,
                     "survey_system_url": survey_system_url,
-                    "azure_client_id": azure_client_id,
+                    "azure_managed_identity_client_id": azure_managed_identity_client_id,
                     "key_vault_url": key_vault_url,
                     "timeout_seconds": timeout_seconds,
                 },
@@ -981,7 +981,7 @@ def main(
                 "status": "KO",
                 "message": error,
                 "inputs": {
-                    "instance": instance,
+                    "snow_instance_name": snow_instance_name,
                     "incident_id": incident_id,
                     "sre_thread_id": sre_thread_id,
                     "agent_id": agent_id,
@@ -990,7 +990,7 @@ def main(
                     "destination_queue": destination_queue,
                     "source_system": source_system,
                     "survey_system_url": survey_system_url,
-                    "azure_client_id": azure_client_id,
+                    "azure_managed_identity_client_id": azure_managed_identity_client_id,
                     "key_vault_url": key_vault_url,
                     "timeout_seconds": timeout_seconds,
                 },
@@ -1016,7 +1016,7 @@ def main(
                 "status": "KO",
                 "message": error,
                 "inputs": {
-                    "instance": instance,
+                    "snow_instance_name": snow_instance_name,
                     "incident_id": incident_id,
                     "sre_thread_id": sre_thread_id,
                     "agent_id": agent_id,
@@ -1025,7 +1025,7 @@ def main(
                     "destination_queue": destination_queue,
                     "source_system": source_system,
                     "survey_system_url": survey_system_url,
-                    "azure_client_id": azure_client_id,
+                    "azure_managed_identity_client_id": azure_managed_identity_client_id,
                     "key_vault_url": key_vault_url,
                     "timeout_seconds": timeout_seconds,
                 },
@@ -1061,7 +1061,7 @@ def main(
             "status": "ok",
             "message": "SNOW update completed successfully.",
             "inputs": {
-                "instance": instance,
+                "snow_instance_name": snow_instance_name,
                 "incident_id": incident_id,
                 "sre_thread_id": sre_thread_id,
                 "agent_id": agent_id,
@@ -1070,7 +1070,7 @@ def main(
                 "destination_queue": destination_queue,
                 "source_system": source_system,
                 "survey_system_url": survey_system_url,
-                "azure_client_id": azure_client_id,
+                "azure_managed_identity_client_id": azure_managed_identity_client_id,
                 "key_vault_url": key_vault_url,
                 "timeout_seconds": timeout_seconds,
             },

@@ -52,10 +52,10 @@ Se i secret elencati di seguito sono già presenti con i valori corretti passare
 
 I nomi seguenti sono statici e **non devono essere sostituiti**:
 
-- `clientid`: contiene il client ID OAuth ServiceNow;
-- `clientsecret`: contiene il client secret OAuth ServiceNow;
-- `username`: contiene lo username ServiceNow;
-- `password`: contiene la password ServiceNow.
+- `snow-clientid`: contiene il client ID OAuth ServiceNow;
+- `snow-clientsecret`: contiene il client secret OAuth ServiceNow;
+- `snow-username`: contiene lo username ServiceNow;
+- `snow-password`: contiene la password ServiceNow.
 
 > Attenzione: I secret devono essere abilitati e non vuoti.
 > Nel template sono riportati soltanto i loro nomi; i valori devono rimanere nel Key Vault e non devono **mai** essere inseriti nella skill.
@@ -143,6 +143,7 @@ In questo step sarà aggiunto il Python tool di arricchimento e spostamento dell
 | source_system | Valore utilizzato per `{{SOURCE_SYSTEM}}` |
 | survey_system_url | https://TEST.webapp.fabricapps.net/ |
 | azure_client_id | Valore utilizzato per `{{AGENT_MANAGED_IDENTITY_CLIENT_ID}}` |
+! key_vault_url | https://`{{KEYVAULT_NAME}}`.vault.azure.net/ - sostituire il placeholder |
 | timeout_seconds | 20 |
 
 ## STEP 7: Creazione della skill
@@ -151,19 +152,7 @@ In questo step sarà aggiunta la skill necessaria a richiamare il Python tool ap
 
 > Se la skill è già stata creta precedentemente, eliminarla o modificarla evitando di lasciare più versioni della stessa, evitando di creare ambiguità per l'agente
 
-### Verifiche prima della pubblicazione
-
-Prima di installare la skill sull'Azure SRE Agent, verificare che:
-
-1. non siano rimasti placeholder `{{...}}`;
-2. `SNOW_INSTANCE_NAME` contenga il solo nome istanza e non un URL o un hostname completo;
-3. `KEYVAULT_NAME` contenga il solo nome del vault;
-4. il client ID configurato appartenga alla User-Assigned Managed Identity assegnata all'agente;
-5. l'identita' abbia accesso in lettura ai quattro secret richiesti;
-6. coda sorgente, coda destinazione e source system corrispondano all'ambiente ServiceNow di destinazione;
-
 ### Aggiunta della skill
-
 
 1. Posizionarsi su
     * Builder --> Skill builder --> Create Skill _(legacy experience)_ o ppure
@@ -176,7 +165,9 @@ Prima di installare la skill sull'Azure SRE Agent, verificare che:
 
 ## STEP 8: istruire l'agente a richiamare lo skill
 
-Per assicurarsi che il subagent incaricato della gestione degli incident utilizzi la skill al termine dell'indagine, aggiungere al relativo incident response plan istruzioni **simili** alle seguenti (personalizzare secondo specificità del vostro agente):
+Per assicurarsi che il subagent incaricato della gestione degli incident utilizzi la skill al termine dell'indagine, aggiungere al relativo incident response plan istruzioni **simili** alle seguenti (personalizzare secondo specificità del vostro agente).
+
+> ATTENZIONE! Ricordare di aggiornare gli skill agganciati all'incident response plan avendo cura che sia selezionato solo quello appena creato e siano eliminati eventuali skill utilizzati precedentemente per lo stesso scopo.
 
 ```markdown
 Gestione Incident:
@@ -189,6 +180,7 @@ Gestione Incident:
   4. classificazione della ricorrenza e tempi MTTR o MTTM.
 - Non inserire il link survey nell'enrichment: viene aggiunto automaticamente dal tool.
 - Non inviare mai testo generico, placeholder, credenziali, token o log grezzi ad alto volume nel campo `u_enrichment_ai`.
-```
 
 La skill deve essere invocata una sola volta per aggiornamento. In caso di `REASSIGNMENT_BLOCKED`, non riprovare e non forzare la riassegnazione. In caso di timeout o errore di rete durante l'aggiornamento, verificare prima lo stato corrente del ticket perché ServiceNow potrebbe avere gia' completato l'operazione.
+
+```
