@@ -152,19 +152,7 @@ In questo step sarà aggiunta la skill necessaria a richiamare il Python tool ap
 
 > Se la skill è già stata creta precedentemente, eliminarla o modificarla evitando di lasciare più versioni della stessa, evitando di creare ambiguità per l'agente
 
-### Verifiche prima della pubblicazione
-
-Prima di installare la skill sull'Azure SRE Agent, verificare che:
-
-1. non siano rimasti placeholder `{{...}}`;
-2. `SNOW_INSTANCE_NAME` contenga il solo nome istanza e non un URL o un hostname completo;
-3. `KEYVAULT_NAME` contenga il solo nome del vault;
-4. il client ID configurato appartenga alla User-Assigned Managed Identity assegnata all'agente;
-5. l'identita' abbia accesso in lettura ai quattro secret richiesti;
-6. coda sorgente, coda destinazione e source system corrispondano all'ambiente ServiceNow di destinazione;
-
 ### Aggiunta della skill
-
 
 1. Posizionarsi su
     * Builder --> Skill builder --> Create Skill _(legacy experience)_ o ppure
