@@ -14,7 +14,7 @@ Questo step farà sì che nell'immagine dei container che eseguono i tool siano 
 
 ![Workspace configuraion](./pictures/workspace-config.png)
 
-2. Aggiungere i seguenti package. Package manager deve essere `pip`, la versione può essere lasciata vuota.
+2. Aggiungere i seguenti package. Package manager deve essere `pip`, la versione può essere lasciata vuota. *Cliccare su `+ add package` anche dopo aver aggiunto l'ultimo pacchetto prima di cliccare `Save`
 
 - `azure-core`
 - `azure-identity`
