@@ -62,6 +62,22 @@ I nomi seguenti sono statici e **non devono essere sostituiti**:
 
 Inoltre verificare che la **User-Assigned Managed Identity** assegnata all'Azure SRE Agent abbia **accesso in lettura ai secret del Key Vault** indicato.
 
+### Retry delle letture da Key Vault
+
+Il tool configura la policy di retry dell'Azure SDK per ogni lettura di un secret:
+al massimo **4 retry oltre al tentativo iniziale**, condivisi tra errori di
+connessione, errori di lettura della risposta e risposte HTTP `408`, `429` o `5xx`.
+Il backoff esponenziale prevede attese di **0, 2, 4 e 8 secondi**; se il servizio
+restituisce `Retry-After` o `x-ms-retry-after-ms`, l'SDK rispetta l'attesa indicata
+dal servizio, che puo' superare il limite di 8 secondi del backoff locale.
+
+Gli errori di autenticazione, le risposte HTTP permanenti (ad esempio `400`,
+`401`, `403` e `404`) e i secret vuoti non vengono ritentati dalla policy.
+Esauriti i retry, il tool restituisce il consueto errore strutturato e non procede
+con le chiamate ServiceNow. Le letture gia' completate non vengono ripetute.
+Questa policy riguarda soltanto le richieste a Key Vault: non aggiunge retry
+alle operazioni ServiceNow e non modifica la policy interna della Managed Identity.
+
 ## STEP 4: Preparare la skill per l'agent specifico
 
 In questo step il template della skill sarà customizzato con i parametri necessari per lo specifico SRE Agent.

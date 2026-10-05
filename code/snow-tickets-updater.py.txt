@@ -5,6 +5,7 @@ Optional environment variables:
     SERVICENOW_HTTP_TIMEOUT_SECONDS: HTTP timeout in seconds. Defaults to 30.
 
 Required packages:
+    azure-core
     azure-identity
     azure-keyvault-secrets
 """
@@ -27,7 +28,14 @@ import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
-from azure.core.exceptions import ClientAuthenticationError, HttpResponseError, ServiceRequestError
+from azure.core.exceptions import (
+    ClientAuthenticationError,
+    HttpResponseError,
+    ServiceRequestError,
+    ServiceResponseError,
+)
+from azure.core.pipeline import PipelineResponse
+from azure.core.pipeline.policies import RetryMode, RetryPolicy
 from azure.identity import ManagedIdentityCredential
 from azure.keyvault.secrets import SecretClient
 
@@ -261,6 +269,16 @@ def validate_key_vault_url(raw_url: str) -> str:
     return f"https://{normalized_hostname}/"
 
 
+class KeyVaultRetryPolicy(RetryPolicy):
+    """Retry transient failures only, even when other errors include Retry-After."""
+
+    def is_retry(self, settings: dict[str, Any], response: PipelineResponse) -> bool:
+        status_code = response.http_response.status_code
+        if status_code not in {408, 429} and not 500 <= status_code < 600:
+            return False
+        return super().is_retry(settings, response)
+
+
 def get_servicenow_credentials(
     vault_url: str,
     managed_identity_client_id: str,
@@ -283,7 +301,21 @@ def get_servicenow_credentials(
             "key_vault",
             identity_mode=identity_mode,
         )
-        with SecretClient(vault_url=vault_url, credential=credential) as secret_client:
+        retry_policy = KeyVaultRetryPolicy(
+            retry_total=4,
+            retry_connect=4,
+            retry_read=4,
+            retry_status=4,
+            retry_mode=RetryMode.Exponential,
+            retry_backoff_factor=1,
+            retry_backoff_max=8,
+            retry_on_status_codes=list(range(500, 600)),
+        )
+        with SecretClient(
+            vault_url=vault_url,
+            credential=credential,
+            retry_policy=retry_policy,
+        ) as secret_client:
             credentials = {}
             for field, secret_name in SECRET_NAMES.items():
                 current_secret_name = secret_name
@@ -335,7 +367,7 @@ def get_servicenow_credentials(
                 "identity_mode": identity_mode,
             },
         ) from exc
-    except ServiceRequestError as exc:
+    except (ServiceRequestError, ServiceResponseError) as exc:
         raise ToolError(
             "KEY_VAULT_UNREACHABLE",
             "key_vault",
