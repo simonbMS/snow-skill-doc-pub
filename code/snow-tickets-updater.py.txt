@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Tool version: 2026-10-09.1
 """Enrich and reassign a ServiceNow incident using credentials from Azure Key Vault.
 
 Optional environment variables:
