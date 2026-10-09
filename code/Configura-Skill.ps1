@@ -1,4 +1,7 @@
 # Genera una copia di SKILL-template.md con i placeholder sostituiti dai valori inseriti dall'utente.
+# =========================
+# Compatibile con la versione <= 2026-10-09.1. Compatibilità da valutare con versioni successive.
+
 
 $templatePath = Join-Path $PSScriptRoot 'SKILL-template.md'
 $outputPath = Join-Path $PSScriptRoot 'SKILL.md'

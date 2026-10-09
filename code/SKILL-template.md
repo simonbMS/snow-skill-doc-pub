@@ -3,6 +3,8 @@ name: servicenow-incident-enrichment-and-reassignment
 description: Enrich and reassign a ServiceNow incident after the Azure SRE Agent has completed its investigation. Use this skill to write the evidence-based incident analysis to ServiceNow and move the ticket from {{SOURCE_QUEUE}} to {{DESTINATION_QUEUE}} through the snow-tickets-updater tool.
 tools:
   - snow-tickets-updater
+metadata:
+  version: "2026-10-09.1"
 ---
 
 # ServiceNow Incident Enrichment and Reassignment
