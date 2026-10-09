@@ -2,7 +2,9 @@
 
 Questo documento contiene gli step necessari all'installazione del Python tool utilizzato per l'enrichment e lo spostamento dell'incident gestito dall'SRE agent verso un'altra coda.
 
-Seguire gli step indicati di seguito.
+Per la prima configurazione seguire gli [step indicati di seguito](#step-1-installare-i-moduli-necessari-al-tool-nel-workspace).
+
+Per aggiornamenti del tool, seguire le istruzioni a [fondo pagina](#aggiornare-tool-e-skill-allultima-versione).
 
 ## STEP 1: Installare i moduli necessari al tool nel workspace
 
@@ -184,3 +186,51 @@ Gestione Incident:
 La skill deve essere invocata una sola volta per aggiornamento. In caso di `REASSIGNMENT_BLOCKED`, non riprovare e non forzare la riassegnazione. In caso di timeout o errore di rete durante l'aggiornamento, verificare prima lo stato corrente del ticket perché ServiceNow potrebbe avere gia' completato l'operazione.
 
 ```
+
+## AGGIORNARE TOOL E SKILL ALL'ULTIMA VERSIONE
+
+### Ri-preparare un ticket Service now
+Ri-eseguire quanto fatto nello [step 5](#step-5-prepara-un-ticket-su-service-now)
+
+### Aggiornare i file locali di skill e tool
+
+#### Se si era eseguita la procedura **automatica**
+
+L'esecuzione di `Configura-Skill.ps1` ha generato nella cartella un file nominato `Configura-Skill.values.json`. Se si desidera modificare qualche valore è possibile effettuarlo direttamente nel file json.
+
+1. Scaricare nuovamente almeno il file `SKILL-template.md` e `Configura-Skill.ps1`
+1. Eseguire nuovamente `Configura-Skill.ps1`
+1. Rispondere sulla console alla richiesta di eventuali ulteriori parametri richiesti
+1. Al termine dell'esecuzione saranno rimpiazzati i file `SKILL.md` e `Configura-Skill.values.json`.
+
+#### Se si era eseguita la procedura **manuale**
+
+1. Scaricare nuovamente almeno il file `SKILL-template.md` e `Configura-Skill.ps1`
+1. Effettuare il replace di tutti i placeholder come indicato nella tabella nel paragrafo [procedura manuale](#procedura-manuale-placeholder-da-sostituire)
+1. Verificare che nel file non rimangano occorrenze di `{{` o `}}`.
+
+### Aggiornare tool e skill
+
+#### Sostituire la skill
+
+1. Dal portale SRE accedere a
+    * Builder --> Skill builder _(legacy experience)_ oppure
+    * Extensions --> Skill builder --> Create Skill _(new experience)_
+2. Selezionare `servicenow-incident-enrichment-and-reassignment`
+3. In alto a destra, selezionare l'icona della matita
+![Edit matita](./pictures/edit.png)
+4. Modificare il campo `SKILL.md` incollando il contenuto del file `SKILL.md` creato localmente
+5. Confermare con `Save`
+
+#### Sostituire il Python tool
+
+1. Dal portale SRE accedere a
+    * Builder --> Agent Canvas --> Radio button `Table view`--> Python tools  _(legacy experience)_ oppure
+    * Build + Setup --> Agent Canvas --> Radio button `Table view`--> Python tools _(new experience)_
+![Python tools](./pictures/EditPython.png)
+2. In alto a destra, selezionare l'icona della matita
+3. Nel campo contenente il codice, incollare il contenuto del file `snow-tickets-updater.py.txt` senza effettiare alcuna modifica
+4. Posizionarsi nel tab `Test Playground` e valorizzare tutti i campi. Alcuni di questi campi dovranno avere lo stesso valore specificato nello [Step 4](#step-4-preparare-la-skill-per-lagent-specifico), altri sono relativi all'incident preparato nello [Step 5](#step-5-prepara-un-ticket-su-service-now). Utilizzare la tabella [nello step 5](#parametri-per-il-test) per una guida su come valorizzare i parametri
+5. Eseguire con il tasto `|> Test`
+6. Se gli step sono stati eseguiti nel modo corretto, il test dovrebbe ritornare esito positivo e l'incident dovrebbe essere stato spostato sulla coda specificata nel parametro `DESTINATION_QUEUE`
+7. Cliccare su `Save`
