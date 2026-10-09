@@ -51,8 +51,8 @@ SECRET_NAMES = {
 
 ACTION_NAME = "Riassegnazione"
 TARGET_SYSTEM = "SERVICENOW"
-ENTITY = "SOM"
-EXTERNAL_TRANSACTION_ID = "AINOI001"
+DEFAULT_ENTITY = "SOM"
+DEFAULT_EXTERNAL_TRANSACTION_ID = "AINOI001"
 TRANSACTION_ID_ALPHABET = string.ascii_lowercase + string.digits
 SENSITIVE_KEYS = {
     "access_token",
@@ -764,6 +764,8 @@ def build_update_payload(
     destination_queue: str,
     source_system: str,
     enrichment: str,
+    entity: str,
+    external_transaction_id: str,
 ) -> dict[str, str]:
     number = incident.get("number")
     sys_id = incident.get("sys_id")
@@ -793,8 +795,8 @@ def build_update_payload(
         "u_sn_sys_id": sys_id,
         "u_enrichment_ai": enrichment,
         "assignment_group": destination_queue,
-        "u_entity": ENTITY,
-        "u_ext_tid": EXTERNAL_TRANSACTION_ID,
+        "u_entity": entity,
+        "u_ext_tid": external_transaction_id,
     }
     trace_log(
         "INFO",
@@ -861,6 +863,8 @@ def main(
     survey_system_url: str,
     azure_managed_identity_client_id: str,
     key_vault_url: str,
+    entity: str = DEFAULT_ENTITY,
+    external_transaction_id: str = DEFAULT_EXTERNAL_TRANSACTION_ID,
     timeout_seconds: int = 30,
 ) -> dict:
     global TRACE_LOGGER
@@ -907,6 +911,11 @@ def main(
         source_queue = require_setting(source_queue, "source queue")
         destination_queue = require_setting(destination_queue, "destination queue")
         source_system = require_setting(source_system, "source system")
+        entity = require_setting(entity, "entity")
+        external_transaction_id = require_setting(
+            external_transaction_id,
+            "external transaction ID",
+        )
         managed_identity_client_id = require_setting(
             azure_managed_identity_client_id,
             "Azure managed identity client ID",
@@ -922,6 +931,8 @@ def main(
             source_queue=source_queue,
             destination_queue=destination_queue,
             source_system=source_system,
+            entity=entity,
+            external_transaction_id=external_transaction_id,
             timeout_seconds=timeout,
             managed_identity_mode="user_assigned",
         )
@@ -965,6 +976,8 @@ def main(
             destination_queue,
             source_system,
             enrichment,
+            entity,
+            external_transaction_id,
         )
         status_code, response = post_external_update(
             instance_url,
@@ -996,6 +1009,8 @@ def main(
                     "survey_system_url": survey_system_url,
                     "azure_managed_identity_client_id": azure_managed_identity_client_id,
                     "key_vault_url": key_vault_url,
+                    "entity": entity,
+                    "external_transaction_id": external_transaction_id,
                     "timeout_seconds": timeout_seconds,
                 },
             }
@@ -1024,6 +1039,8 @@ def main(
                     "survey_system_url": survey_system_url,
                     "azure_managed_identity_client_id": azure_managed_identity_client_id,
                     "key_vault_url": key_vault_url,
+                    "entity": entity,
+                    "external_transaction_id": external_transaction_id,
                     "timeout_seconds": timeout_seconds,
                 },
             }
@@ -1059,6 +1076,8 @@ def main(
                     "survey_system_url": survey_system_url,
                     "azure_managed_identity_client_id": azure_managed_identity_client_id,
                     "key_vault_url": key_vault_url,
+                    "entity": entity,
+                    "external_transaction_id": external_transaction_id,
                     "timeout_seconds": timeout_seconds,
                 },
             }
@@ -1104,6 +1123,8 @@ def main(
                 "survey_system_url": survey_system_url,
                 "azure_managed_identity_client_id": azure_managed_identity_client_id,
                 "key_vault_url": key_vault_url,
+                "entity": entity,
+                "external_transaction_id": external_transaction_id,
                 "timeout_seconds": timeout_seconds,
             },
         }

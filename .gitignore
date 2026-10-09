@@ -1,4 +1,5 @@
 archive
+__pycache__
 *.zip
 *.tar.gz
 *.rar
