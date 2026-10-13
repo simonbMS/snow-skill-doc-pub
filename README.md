@@ -135,7 +135,7 @@ In questo step sarà aggiunto il Python tool di arricchimento e spostamento dell
 
 | Parametro | Valore |
 | -- | -- |
-| instance | Valore utilizzato per `{{SNOW_INSTANCE_NAME}}` |
+| snow_instance_name | Valore utilizzato per `{{SNOW_INSTANCE_NAME}}` |
 | incident_id | ID dell'incident creato nello step 5 |
 | sre_thread_id | 743a0a23-e266-4704-8c4a-d0420c36487d (o altro guid) |
 | agent_id | test-installazione |
@@ -144,8 +144,10 @@ In questo step sarà aggiunto il Python tool di arricchimento e spostamento dell
 | destination_queue |  Valore utilizzato per `{{DESTINATION_QUEUE}}` |
 | source_system | Valore utilizzato per `{{SOURCE_SYSTEM}}` |
 | survey_system_url | https://TEST.webapp.fabricapps.net/ |
-| azure_client_id | Valore utilizzato per `{{AGENT_MANAGED_IDENTITY_CLIENT_ID}}` |
+| azure_managed_identity_client_id | Valore utilizzato per `{{AGENT_MANAGED_IDENTITY_CLIENT_ID}}` |
 | key_vault_url | https://`{{KEYVAULT_NAME}}`.vault.azure.net/ - sostituire il placeholder |
+| entity | SOM |
+| external_transaction_id | AINOI001 |
 | timeout_seconds | 20 |
 
 ## STEP 7: Creazione della skill
@@ -234,3 +236,7 @@ L'esecuzione di `Configura-Skill.ps1` ha generato nella cartella un file nominat
 5. Eseguire con il tasto `|> Test`
 6. Se gli step sono stati eseguiti nel modo corretto, il test dovrebbe ritornare esito positivo e l'incident dovrebbe essere stato spostato sulla coda specificata nel parametro `DESTINATION_QUEUE`
 7. Cliccare su `Save`
+
+## Change log
+
+Vedi file [Change Log](ChangeLog.md)

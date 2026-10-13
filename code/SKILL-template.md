@@ -4,7 +4,7 @@ description: Enrich and reassign a ServiceNow incident after the Azure SRE Agent
 tools:
   - snow-tickets-updater
 metadata:
-  version: "2026-10-09.1"
+  version: "2026-10-13.1"
 ---
 
 # ServiceNow Incident Enrichment and Reassignment
@@ -49,6 +49,9 @@ Always use these exact values:
 | `source_system` | `{{SOURCE_SYSTEM}}` |
 | `source_queue` | `{{SOURCE_QUEUE}}` |
 | `destination_queue` | `{{DESTINATION_QUEUE}}` |
+| `entity` | `SOM` |
+| `external_transaction_id` | `AINOI001` |
+| `timeout_seconds` | `30` |
 
 Do not infer, abbreviate, translate, or substitute any of these values. If this configuration does not match the active Azure SRE Agent environment, stop without invoking the tool and report `CONFIGURATION_MISMATCH`.
 
@@ -76,7 +79,7 @@ Resolve these values from the active incident and thread:
 | `sre_thread_id` | The current Azure SRE Agent thread ID |
 | `enrichment_text` | The final evidence-based incident enrichment prepared from the investigation |
 | `survey_system_url` | The configured absolute HTTP or HTTPS URL of the survey system |
-| `azure_managed_identity_client_it` | The client ID of the user-assigned managed identity configured for the Azure SRE Agent |
+| `azure_managed_identity_client_id` | The client ID of the user-assigned managed identity configured for the Azure SRE Agent |
 
 Do not invent or guess a missing input. If one is unavailable, do not invoke the tool; report which input is missing.
 
@@ -121,11 +124,14 @@ agent_id: <current Azure SRE Agent resource name>
 sre_thread_id: <current Azure SRE Agent thread ID>
 enrichment_text: <evidence-based HTML enrichment>
 survey_system_url: https://rigid-wood-036d3e4d7d-westeurope.webapp.fabricapps.net/
-azure_managed_identity_client_it: {{AGENT_MANAGED_IDENTITY_CLIENT_ID}}
+azure_managed_identity_client_id: {{AGENT_MANAGED_IDENTITY_CLIENT_ID}}
 source_queue: {{SOURCE_QUEUE}}
 destination_queue: {{DESTINATION_QUEUE}}
 source_system: {{SOURCE_SYSTEM}}
 key_vault_url: https://{{KEYVAULT_NAME}}.vault.azure.net/
+entity: SOM
+external_transaction_id: AINOI001
+timeout_seconds: 30
 ```
 
 7. Read the authoritative final JSON result. Diagnostic JSONL records contain an `event` property; the final result contains `status` and no `event` property.
