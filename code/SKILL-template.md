@@ -4,7 +4,7 @@ description: Enrich and reassign a ServiceNow incident after the Azure SRE Agent
 tools:
   - snow-tickets-updater
 metadata:
-  version: "2026-10-13.1"
+  version: "2026-10-15.1"
 ---
 
 # ServiceNow Incident Enrichment and Reassignment
@@ -50,7 +50,7 @@ Always use these exact values:
 | `source_queue` | `{{SOURCE_QUEUE}}` |
 | `destination_queue` | `{{DESTINATION_QUEUE}}` |
 | `entity` | `SOM` |
-| `external_transaction_id` | `AINOI001` |
+| `external_transaction_id` | `{{SRE_AGENT_NAME}}` |
 | `timeout_seconds` | `30` |
 
 Do not infer, abbreviate, translate, or substitute any of these values. If this configuration does not match the active Azure SRE Agent environment, stop without invoking the tool and report `CONFIGURATION_MISMATCH`.
@@ -130,7 +130,7 @@ destination_queue: {{DESTINATION_QUEUE}}
 source_system: {{SOURCE_SYSTEM}}
 key_vault_url: https://{{KEYVAULT_NAME}}.vault.azure.net/
 entity: SOM
-external_transaction_id: AINOI001
+external_transaction_id: {{SRE_AGENT_NAME}}
 timeout_seconds: 30
 ```
 
