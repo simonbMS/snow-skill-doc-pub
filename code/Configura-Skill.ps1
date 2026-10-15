@@ -14,7 +14,7 @@ $placeholders = [ordered]@{
     'SOURCE_SYSTEM'                    = "Identificativo del sistema sorgente inviato nel campo custom ServiceNow 'u_source_system'. Esempio: AINOISRE<SOM>."
     'SOURCE_QUEUE'                     = "Gruppo ServiceNow dal quale e' consentita la riassegnazione. L'aggiornamento viene bloccato se il ticket non appartiene esattamente a questo gruppo. | `AINOISRE_<SOM>` o il nome esatto concordato per il gruppo sorgente."
     'DESTINATION_QUEUE'                = "Gruppo ServiceNow destinatario della riassegnazione (deve corrispondere esattamente al nome in ServiceNow)."
-    'SRE_AGENT_NAME'                    = "Nome dell'agente SRE. Inserito nel campo *entity* di ServiceNow."
+    'SRE_AGENT_NAME'                   = "Nome dell'agente SRE. Inserito nel campo *entity* di ServiceNow."
 }
 
 if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) {

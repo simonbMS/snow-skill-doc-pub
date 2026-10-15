@@ -102,6 +102,7 @@ Eseguire i seguenti passi, **solo se non si è eseguita la procedura automatica*
 | `{{SOURCE_SYSTEM}}` | Identificativo del sistema sorgente inviato nel campo custom ServiceNow `u_source_system`. | `AINOISRE<SOM>`, dove `<SOM>` e' l'identificativo specifico del SOM |
 | `{{SOURCE_QUEUE}}` | Gruppo ServiceNow dal quale e' consentita la riassegnazione. L'aggiornamento viene bloccato se il ticket non appartiene esattamente a questo gruppo. | `AINOISRE_<SOM>` o il nome esatto concordato per il gruppo sorgente |
 | `{{DESTINATION_QUEUE}}` | Gruppo ServiceNow destinatario della riassegnazione, inviato nel campo `assignment_group`. | Nome esatto del gruppo di destinazione |
+| `{{SRE_AGENT_NAME}}` | Nome dell'agente SRE. Inserito nel campo *entity* di ServiceNow | pdlksreopenai01azin |
 
 I valori delle code devono corrispondere esattamente ai nomi restituiti da ServiceNow: non abbreviarli, tradurli o modificarne maiuscole, spazi o caratteri.
 
@@ -147,7 +148,7 @@ In questo step sarà aggiunto il Python tool di arricchimento e spostamento dell
 | azure_managed_identity_client_id | Valore utilizzato per `{{AGENT_MANAGED_IDENTITY_CLIENT_ID}}` |
 | key_vault_url | https://`{{KEYVAULT_NAME}}`.vault.azure.net/ - sostituire il placeholder |
 | entity | SOM |
-| external_transaction_id | AINOI001 |
+| external_transaction_id | `{{SRE_AGENT_NAME}}` |
 | timeout_seconds | 20 |
 
 ## STEP 7: Creazione della skill

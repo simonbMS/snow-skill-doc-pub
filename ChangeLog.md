@@ -4,6 +4,7 @@
 
 - `SKILL-template.md`: aggiunto placeholder per parametro SRE_AGENT_NAME -> Entity
 - `Configura-Skill.ps1`: aggiunta gestione parametro SRE_AGENT_NAME -> Entity
+- `README.md`: aggiunto placeholder per parametro SRE_AGENT_NAME
 
 ## Versione 2026-10-13.1
 
