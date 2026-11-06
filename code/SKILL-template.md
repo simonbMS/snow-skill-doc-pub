@@ -193,7 +193,7 @@ Use the structured thread-trace events with the same `run_id`, `incident_id`, an
 | `SERVICENOW_INCIDENT_READ_FAILED*` | Incident read failed, timed out, or returned invalid JSON | Retry only when `retryable` is `true` |
 | `SOURCE_QUEUE_MISMATCH` | The incident is no longer owned by the expected source queue | Do not retry or override ownership |
 | `SERVICENOW_UPDATE_REJECTED` | ServiceNow explicitly rejected the update payload | Report the safe error details and correct the underlying data |
-| `SERVICENOW_UPDATE_FAILED` | The update failed, timed out, or had an ambiguous response | Do not automatically retry; first verify the current incident state |
+| `SERVICENOW_UPDATE_FAILED*` | The update failed, timed out, or had an ambiguous response | Do not automatically retry; first verify the current incident state |
 | `UNEXPECTED_ERROR` | An unclassified tool failure occurred | Use the trace `run_id`, stage, and safe traceback frames for troubleshooting |
 
 An error family ending in `_NETWORK` or `_TIMEOUT` is normally transient, but an update-stage network error or timeout is ambiguous because ServiceNow may have committed the request before the connection failed.

@@ -238,6 +238,17 @@ L'esecuzione di `Configura-Skill.ps1` ha generato nella cartella un file nominat
 6. Se gli step sono stati eseguiti nel modo corretto, il test dovrebbe ritornare esito positivo e l'incident dovrebbe essere stato spostato sulla coda specificata nel parametro `DESTINATION_QUEUE`
 7. Cliccare su `Save`
 
+#### Riconfigurare il connettore SNOW per certificazione vs produzione
+
+> Nota bene: riconfigurare il connettore Service Now ad un'altra piattaforma *è un processo non supportato* e sconsigliato.
+
+1. Copiare ed eliminare tutti gli incident response plan
+1. Disconnettere la incident platform
+1. Modificare i segreti nel key vault utilizzato dal tool
+1. Modificare i parametri della skill servicenow-incident-enrichment-and-reassignment ove necessario (almeno SNOW_INSTANCE_NAME)
+1. Collegrare la incident platform destinazione
+1. Ricreare i connettori
+
 ## Change log
 
 Vedi file [Change Log](ChangeLog.md)
