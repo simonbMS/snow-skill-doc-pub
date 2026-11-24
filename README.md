@@ -177,7 +177,7 @@ Per assicurarsi che il subagent incaricato della gestione degli incident utilizz
 ```markdown
 Gestione Incident:
 
-- Al termine della valutazione dell'incident, usa la skill `servicenow-incident-enrichment-and-reassignment` per arricchire e riassegnare il ticket al gruppo competente.
+- Al termine della valutazione dell'incident, usa SEMPRE e SOLO la skill `servicenow-incident-enrichment-and-reassignment` per arricchire e riassegnare il ticket al gruppo competente.
 - Inserisci nell'enrichment soltanto informazioni supportate dalle evidenze raccolte, includendo quando disponibili:
   1. sintesi, impatto e risorse coinvolte;
   2. root cause o ipotesi meglio supportata;

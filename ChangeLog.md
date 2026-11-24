@@ -1,5 +1,10 @@
 # Change Log
 
+## Versione 2026-11-26.1
+
+- `SKILL-template.md`: modificato prompt per chiarire il fatto che nessun altro tool/skill deve essere utilizzato per il reassignment
+- `README.md`: modificato prompt di esempio per chiarire il fatto che nessun altro tool/skill deve essere utilizzato per il reassignment
+
 ## Versione 2026-10-15.1
 
 - `SKILL-template.md`: aggiunto placeholder per parametro SRE_AGENT_NAME -> u_ext_tid

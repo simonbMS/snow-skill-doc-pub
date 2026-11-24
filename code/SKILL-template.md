@@ -1,26 +1,30 @@
 ---
 name: servicenow-incident-enrichment-and-reassignment
-description: Enrich and reassign a ServiceNow incident after the Azure SRE Agent has completed its investigation. Use this skill to write the evidence-based incident analysis to ServiceNow and move the ticket from {{SOURCE_QUEUE}} to {{DESTINATION_QUEUE}} through the snow-tickets-updater tool.
+description: Mandatory skill for ServiceNow incident enrichment and reassignment from {{SOURCE_QUEUE}} to {{DESTINATION_QUEUE}}. Early acknowledgement is allowed. Load before enrichment or reassignment; use only snow-tickets-updater to submit both enrichment and reassignment together, never another tool.
 tools:
   - snow-tickets-updater
 metadata:
-  version: "2026-10-15.1"
+  version: "2026-11-24.1"
 ---
 
 # ServiceNow Incident Enrichment and Reassignment
 
 ## When to use this skill
 
-Use this skill only when all of the following conditions are true:
+ALWAYS use this skill and its `snow-tickets-updater` Python tool to enrich and reassign a ServiceNow incident from `{{SOURCE_QUEUE}}` to `{{DESTINATION_QUEUE}}`. This is a mandatory workflow, not an optional alternative to other ServiceNow tools, skills or connector.
 
-1. The Azure SRE Agent has completed the incident investigation or has a clearly identified best-supported diagnosis.
-2. An evidence-based enrichment is ready to be written to the ServiceNow `u_enrichment_ai` field.
-3. The ServiceNow incident number or `sys_id` is known.
-4. The active Azure SRE Agent thread ID is available.
-5. The incident is expected to be assigned to `{{SOURCE_QUEUE}}`.
-6. The incident must be reassigned to `{{DESTINATION_QUEUE}}`.
+Load and follow this skill as soon as the incident workflow requires enrichment or reassignment, BEFORE either operation. The incident may be acknowledged immediately after reading it, subject to the source-queue safeguards below; acknowledgement does not replace this skill.
 
-Do not use this skill for investigation-only requests, speculative updates, or incidents that must remain in their current assignment group.
+## Mandatory ordering and exclusive write path
+
+The tool credentials are scoped to the expected source queue. Preliminary ticket changes can trigger ServiceNow routing rules and move the incident to a queue where these credentials no longer work.
+
+- Early acknowledgement through the incident workflow's acknowledgement tool is allowed, including only the fields required for acknowledgement.
+- Apart from this acknowledgement exception, do not use another ServiceNow connector, MCP tool, API, HTTP request, script, automation, or delegated agent to modify or reassign the ticket before this workflow completes.
+- Do not make preliminary changes to assignment, state, priority, category, comments, work notes, or enrichment to "prepare" the ticket.
+- Prepare the complete enrichment in the agent context without saving it to ServiceNow. The enrichment and reassignment must be submitted together by this skill's `snow-tickets-updater` invocation, enrichment and reassignment will be executed in a single `snow-tickets-updater` python tool execution. Do not reassign the incident with another tool and then invoke this tool to add enrichment.
+- Wait for the authoritative final result and require `status: REASSIGNED` before reporting completion.
+- If an input is missing, the tool is unavailable, or the operation is blocked, fails, or has an ambiguous result, stop ticket writes and report the issue. Never fall back to another write path, change the configured source queue to bypass a check, or move the ticket back to make the tool work. Apply the retry-safety rules below before considering another invocation.
 
 ## Attached tool
 
@@ -109,13 +113,14 @@ Do not include:
 
 ## Procedure
 
-1. Confirm that the investigation is complete enough to produce an evidence-based enrichment.
-2. Resolve the ServiceNow `incident_id`.
-3. Resolve the current `sre_thread_id`; never reuse a thread ID from another incident.
-4. Resolve the name of the agent `agent_id`. This is always the name of THIS agent azure resource, never use a name assigned by users.
-4. Build `enrichment_text` according to the enrichment requirements.
-5. Verify the fixed configuration values in this skill.
-6. Invoke `snow-tickets-updater` exactly once with:
+1. Load this skill before enrichment or reassignment and enforce the acknowledgement safeguards and exclusive write-path rules above.
+2. Confirm that the investigation is complete enough to produce an evidence-based enrichment.
+3. Resolve the ServiceNow `incident_id`.
+4. Resolve the current `sre_thread_id`; never reuse a thread ID from another incident.
+5. Resolve the name of the agent `agent_id`. This is always the name of THIS agent azure resource, never use a name assigned by users.
+6. Build `enrichment_text` in the agent context according to the enrichment requirements; do not write it to ServiceNow separately.
+7. Verify the fixed configuration values and all required dynamic inputs in this skill.
+8. Invoke `snow-tickets-updater` exactly once to submit enrichment and reassignment together, with:
 
 ```yaml
 snow_instance_name: {{SNOW_INSTANCE_NAME}}
@@ -134,9 +139,9 @@ external_transaction_id: {{SRE_AGENT_NAME}}
 timeout_seconds: 30
 ```
 
-7. Read the authoritative final JSON result. Diagnostic JSONL records contain an `event` property; the final result contains `status` and no `event` property.
-8. Treat the operation as successful only when the final result has `status: REASSIGNED`.
-9. Never infer success from tool activation, an HTTP attempt, or an intermediate trace event.
+9. Read the authoritative final JSON result. Diagnostic JSONL records contain an `event` property; the final result contains `status` and no `event` property.
+10. Treat the operation as successful only when the final result has `status: REASSIGNED`.
+11. Never infer success from tool activation, an HTTP attempt, or an intermediate trace event. If success is not confirmed, follow result handling and retry safety below without using an alternative write path.
 
 ## Result handling
 
